@@ -10,6 +10,8 @@ const sheetNames = [
 
 const sheetMenu = document.getElementById("sheetMenu");
 const mainView = document.getElementById("mainView");
+const weekSelector = document.getElementById("weekSelectorContainer");
+const weekPicker = document.getElementById("weekPicker");
 
 sheetNames.forEach(name => {
   const li = document.createElement("li");
@@ -19,64 +21,51 @@ sheetNames.forEach(name => {
   sheetMenu.appendChild(li);
 });
 
+function getMonday(d) {
+  d = new Date(d);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  return monday.toISOString().split("T")[0];
+}
+
 function loadSheetView(sheetName) {
   mainView.innerHTML = "";
+  weekSelector.classList.add("hidden");
+
   if (sheetName === "DASHBOARD") {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
+  } else if (sheetName === "Daily over 8hr") {
+    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading data...</p>";
+    weekSelector.classList.remove("hidden");
+
+    const today = new Date();
+    weekPicker.value = getMonday(today);
+    loadDailyOTData(weekPicker.value);
+
+    weekPicker.onchange = () => {
+      loadDailyOTData(weekPicker.value);
+    };
   } else {
-    mainView.innerHTML = `
-      <h1 class="text-2xl font-bold text-gray-800 mb-4">${sheetName}</h1>
-      <p class="text-gray-600">This section will replicate the layout and logic of the "${sheetName}" sheet.</p>
-    `;
+    mainView.innerHTML = `<h1 class="text-2xl font-bold">${sheetName}</h1>`;
   }
 }
 
 function getDashboardHTML() {
   return `
     <h1 class="text-2xl font-bold text-blue-800 mb-4">Labor Dashboard</h1>
-    <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded mb-4">
-      <strong>IMPORTANT:</strong> Transfer Schedules, Fct & CL Hrs before using this tab.
-    </div>
-
-    <div class="grid grid-cols-2 gap-4 text-center font-semibold text-gray-700 mb-4">
-      <div class="border p-4 bg-gray-50 rounded">Daily</div>
-      <div class="border p-4 bg-gray-50 rounded">Weekly</div>
-    </div>
-
-    <div class="grid grid-cols-3 gap-6 mb-6">
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Last Week</h2>
-        <p>From: <strong>May 19, 2025</strong></p>
-        <p>To: <strong>May 25, 2025</strong></p>
-      </div>
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Current Week</h2>
-        <p>From: <strong>June 2, 2025</strong></p>
-        <p>To: <strong>June 8, 2025</strong></p>
-      </div>
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Forecast Week</h2>
-        <p>From: <strong>June 2, 2025</strong></p>
-        <p>To: <strong>June 8, 2025</strong></p>
-      </div>
-    </div>
-
     <div class="mb-4">
       <label for="csvUpload" class="font-semibold block mb-2">Upload CSV Report:</label>
       <input type="file" id="csvUpload" class="border rounded p-2 w-full">
     </div>
-
     <p class="text-sm text-gray-600 italic">Data is stored in the cloud for calculations only. Not shown on screen.</p>
   `;
 }
 
 function handleFileUpload(event) {
   const file = event.target.files[0];
-  if (!file || !file.name.endsWith(".csv")) {
-    alert("Please upload a CSV file.");
-    return;
-  }
+  if (!file || !file.name.endsWith(".csv")) return alert("Upload CSV only.");
 
   const reader = new FileReader();
   reader.onload = function (e) {
@@ -87,10 +76,7 @@ function handleFileUpload(event) {
 }
 
 async function syncToFirestore(data) {
-  if (!window.firestoreDb) return console.error("Firestore is not available.");
-
   const headers = data[0];
-
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const entry = {};
@@ -98,47 +84,116 @@ async function syncToFirestore(data) {
       entry[h.trim()] = row[idx]?.trim() ?? "";
     });
 
-    // You MUST customize these field names if different
-    const keyFields = [entry["Date"], entry["EmployeeID"], entry["Department"]];
-    if (keyFields.includes(undefined)) {
-      console.warn("Skipping row: missing required key fields", entry);
-      continue;
-    }
-
-    const docId = keyFields.join("_");
-
-    const docRef = window.firestoreCol(window.firestoreDb, "uploads");
-    const docPath = `${docRef.path}/${docId}`;
+    const key = `${entry["Date"]}_${entry["EmployeeID"]}_${entry["Department"]}`;
+    const id = btoa(key); // use base64 to avoid bad characters
 
     try {
-      const docSnapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
-      let matchFound = false;
-
-      docSnapshot.forEach(async doc => {
-        if (doc.id === docId) {
-          matchFound = true;
-          const existing = doc.data();
-          const hasChanges = Object.keys(entry).some(key => entry[key] !== existing[key]);
-          if (hasChanges) {
-            await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry); // Overwrite
-            console.log("Updated:", docId);
-          } else {
-            console.log("No changes for:", docId);
-          }
-        }
-      });
-
-      if (!matchFound) {
-        await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry);
-        console.log("Added new:", docId);
-      }
-
+      const docRef = window.firestoreCol(window.firestoreDb, "uploads");
+      await window.firestoreAdd(docRef, entry);
     } catch (err) {
-      console.error("Error syncing Firestore:", err);
+      console.error("Upload failed", err);
     }
   }
+  alert("Data uploaded to Firestore.");
+}
 
-  alert("Upload complete. Data saved to Firestore.");
+// ========== DAILY OVER 8HR ==========
+
+function getWeekDates(start) {
+  const dates = [];
+  const base = new Date(start);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return dates;
+}
+
+async function loadDailyOTData(mondayStr) {
+  mainView.innerHTML = "";
+  const dates = getWeekDates(mondayStr);
+  const snapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
+
+  const records = [];
+  snapshot.forEach(doc => records.push(doc.data()));
+
+  // Filter by selected week
+  const weeklyData = records.filter(r => dates.includes(r.Date));
+
+  // Group by EmployeeID
+  const employees = {};
+  weeklyData.forEach(r => {
+    const id = r.EmployeeID;
+    if (!employees[id]) {
+      employees[id] = {
+        name: r.Name,
+        position: r.Position,
+        department: r.Department,
+        daily: {},
+      };
+    }
+    employees[id].daily[r.Date] = parseFloat(r.Hours || 0);
+  });
+
+  // Build HTML table
+  const table = document.createElement("table");
+  table.className = "w-full table-auto text-xs border border-collapse";
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  [
+    "ID", "Name", "Dept", ...dates.map(d => new Date(d).toDateString().split(" ")[0]),
+    "Total", "Days", "Projected", "OT", "Risk", "Risk %"
+  ].forEach(h => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    th.className = "border px-2 py-1 bg-gray-100";
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  Object.entries(employees).forEach(([id, emp]) => {
+    const tr = document.createElement("tr");
+    const row = [];
+
+    const daily = dates.map(d => emp.daily[d] || 0);
+    const total = daily.reduce((a, b) => a + b, 0);
+    const days = daily.filter(h => h > 0).length;
+    const projected = total + (5 - days) * 8;
+    const actualOT = Math.max(0, total - 40);
+    const projOT = Math.max(0, projected - 40);
+
+    let risk = "No Risk", riskPct = "0%";
+    if (actualOT > 0) {
+      risk = "Overtime";
+      riskPct = "100%";
+    } else if (projOT > 0) {
+      risk = "At Risk";
+      riskPct = `${Math.round((days / 5) * 100)}%`;
+    }
+
+    [
+      id, emp.name, emp.department, ...daily.map(n => n.toFixed(2)),
+      total.toFixed(2), days, projected.toFixed(2), actualOT.toFixed(2),
+      risk, riskPct
+    ].forEach((val, i) => {
+      const td = document.createElement("td");
+      td.textContent = val;
+      td.className = "border px-2 py-1 text-center";
+      if (i === 11) {
+        td.style.backgroundColor =
+          risk === "Overtime" ? "#f87171" :
+          risk === "At Risk" ? "#facc15" : "#d1fae5";
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  mainView.appendChild(table);
 }
 
 loadSheetView("DASHBOARD");
