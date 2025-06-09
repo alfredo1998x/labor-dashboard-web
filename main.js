@@ -1,6 +1,4 @@
-const sheetNames = [
-  "DASHBOARD", "Daily over 8hr"
-];
+const sheetNames = ["DASHBOARD", "Daily over 8hr"];
 
 const sheetMenu = document.getElementById("sheetMenu");
 const mainView = document.getElementById("mainView");
@@ -31,16 +29,11 @@ function loadSheetView(sheetName) {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
   } else if (sheetName === "Daily over 8hr") {
-    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading...</p>";
+    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading data...</p>";
     weekSelector.classList.remove("hidden");
-
-    const today = new Date();
-    weekPicker.value = getMonday(today);
+    weekPicker.value = getMonday(new Date());
     loadDailyOver8hrTable(weekPicker.value);
-
-    weekPicker.onchange = () => {
-      loadDailyOver8hrTable(weekPicker.value);
-    };
+    weekPicker.onchange = () => loadDailyOver8hrTable(weekPicker.value);
   }
 }
 
@@ -58,7 +51,7 @@ function getDashboardHTML() {
 function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file || !file.name.endsWith(".csv")) {
-    alert("Upload a CSV file.");
+    alert("Please upload a CSV file.");
     return;
   }
 
@@ -79,10 +72,14 @@ async function normalizeAndUpload(data) {
 
     if (!raw["Business Date"] || !raw["Number"] || !raw["Hours"]) continue;
 
+    const name = raw["First Name"]
+      ? `${raw["Last Name"] ?? ""} ${raw["First Name"] ?? ""}`.trim()
+      : raw["Last Name"] ?? "Unknown";
+
     const entry = {
       Date: raw["Business Date"].split(" ")[0],
       EmployeeID: raw["Number"],
-      Name: `${raw["Last Name"] ?? ""} ${raw["First Name"] ?? ""}`.trim(),
+      Name: name,
       Hours: raw["Hours"],
       Position: raw["Job"] ?? "",
       Department: raw["Department"] ?? ""
@@ -128,7 +125,7 @@ async function loadDailyOver8hrTable(mondayStr) {
         name: r.Name,
         department: r.Department,
         position: r.Position,
-        daily: {},
+        daily: {}
       };
     }
     employees[id].daily[r.Date] = parseFloat(r.Hours || 0);
@@ -138,65 +135,65 @@ async function loadDailyOver8hrTable(mondayStr) {
   table.className = "w-full table-auto text-xs border border-collapse";
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
+
   [
-    "ID", "Name", "Position", "Dept",
-    ...weekdayNames, "Total", "Days", "Projected", "OT", "Risk", "Risk %", "OT Display"
+    "ID", "Name", "Position", "Department",
+    ...weekdayNames,
+    "Total", "Days", "Projected", "OT", "Risk", "Risk %", "OT Display"
   ].forEach(h => {
     const th = document.createElement("th");
     th.textContent = h;
     th.className = "border px-2 py-1 bg-gray-100";
     headerRow.appendChild(th);
   });
+
   thead.appendChild(headerRow);
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
+
   Object.entries(employees).forEach(([id, emp]) => {
     const tr = document.createElement("tr");
     const daily = dates.map(d => emp.daily[d] || 0);
     const total = daily.reduce((a, b) => a + b, 0);
     const days = daily.filter(h => h > 0).length;
     const projected = total + (5 - days) * 8;
-    const projectedOT = Math.max(0, projected - 40);
     const actualOT = Math.max(0, total - 40);
+    const projectedOT = Math.max(0, projected - 40);
 
-    let risk = "No Risk", riskPct = "0%", displayOT = "";
+    let risk = "No Risk", riskPct = "0%", otText = "";
     if (actualOT > 0) {
       risk = "Overtime";
       riskPct = "100%";
-      displayOT = `${actualOT.toFixed(2)} hr OT`;
+      otText = `${actualOT.toFixed(2)} hr OT`;
     } else if (projectedOT > 0) {
       risk = "At Risk";
       riskPct = `${Math.round((days / 5) * 100)}%`;
-      displayOT = `${projectedOT.toFixed(2)} hr OT`;
+      otText = `${projectedOT.toFixed(2)} hr OT`;
     }
 
     const rowData = [
-      id,
-      emp.name,
-      emp.position,
-      emp.department,
-      ...daily.map(n => n.toFixed(2)),
+      id, emp.name, emp.position, emp.department,
+      ...daily.map(h => h.toFixed(2)),
       total.toFixed(2),
       days,
       projected.toFixed(2),
       actualOT.toFixed(2),
       risk,
       riskPct,
-      displayOT
+      otText
     ];
 
     rowData.forEach((val, i) => {
       const td = document.createElement("td");
       td.textContent = val;
       td.className = "border px-2 py-1 text-center";
-
       if (i === 11) {
         td.style.backgroundColor =
           risk === "Overtime" ? "#f87171" :
-          risk === "At Risk" ? "#facc15" : "#d1fae5";
+          risk === "At Risk" ? "#facc15" :
+          "#d1fae5";
       }
-
       tr.appendChild(td);
     });
 
@@ -204,6 +201,7 @@ async function loadDailyOver8hrTable(mondayStr) {
   });
 
   table.appendChild(tbody);
+  mainView.innerHTML = "";
   mainView.appendChild(table);
 }
 
