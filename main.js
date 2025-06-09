@@ -24,7 +24,6 @@ function loadSheetView(sheetName) {
   if (sheetName === "DASHBOARD") {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
-    loadDashboardData();
   } else {
     mainView.innerHTML = `
       <h1 class="text-2xl font-bold text-gray-800 mb-4">${sheetName}</h1>
@@ -68,12 +67,7 @@ function getDashboardHTML() {
       <input type="file" id="csvUpload" class="border rounded p-2 w-full">
     </div>
 
-    <div class="overflow-auto">
-      <table id="dataTable" class="w-full table-auto border-collapse border text-xs">
-        <thead id="tableHead" class="bg-gray-200"></thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
+    <p class="text-sm text-gray-600 italic">Data is stored in the cloud for calculations only. Not shown on screen.</p>
   `;
 }
 
@@ -87,93 +81,64 @@ function handleFileUpload(event) {
   const reader = new FileReader();
   reader.onload = function (e) {
     const rows = e.target.result.trim().split("\n").map(r => r.split(","));
-    renderTable(rows);
+    syncToFirestore(rows);
   };
   reader.readAsText(file);
 }
 
-function renderTable(data) {
-  const head = document.getElementById("tableHead");
-  const body = document.getElementById("tableBody");
-  head.innerHTML = "";
-  body.innerHTML = "";
+async function syncToFirestore(data) {
+  if (!window.firestoreDb) return console.error("Firestore is not available.");
 
   const headers = data[0];
 
-  const headerRow = document.createElement("tr");
-  headers.forEach(cell => {
-    const th = document.createElement("th");
-    th.textContent = cell;
-    th.className = "border px-2 py-1 text-left bg-gray-100";
-    headerRow.appendChild(th);
-  });
-  head.appendChild(headerRow);
-
-  data.slice(1).forEach(async row => {
-    const tr = document.createElement("tr");
-    row.forEach(cell => {
-      const td = document.createElement("td");
-      td.textContent = cell;
-      td.className = "border px-2 py-1";
-      tr.appendChild(td);
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const entry = {};
+    headers.forEach((h, idx) => {
+      entry[h.trim()] = row[idx]?.trim() ?? "";
     });
-    body.appendChild(tr);
 
-    // Save to Firestore
-    if (window.firestoreDb) {
-      const entry = {};
-      headers.forEach((key, i) => {
-        entry[key.trim()] = row[i]?.trim() ?? "";
-      });
-      try {
-        await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry);
-      } catch (err) {
-        console.error("Firestore save failed:", err);
-      }
+    // You MUST customize these field names if different
+    const keyFields = [entry["Date"], entry["EmployeeID"], entry["Department"]];
+    if (keyFields.includes(undefined)) {
+      console.warn("Skipping row: missing required key fields", entry);
+      continue;
     }
-  });
-}
 
-async function loadDashboardData() {
-  const head = document.getElementById("tableHead");
-  const body = document.getElementById("tableBody");
-  head.innerHTML = "";
-  body.innerHTML = "";
+    const docId = keyFields.join("_");
 
-  if (!window.firestoreDb) return;
+    const docRef = window.firestoreCol(window.firestoreDb, "uploads");
+    const docPath = `${docRef.path}/${docId}`;
 
-  try {
-    const snapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
-    const rows = [];
-    snapshot.forEach(doc => rows.push(doc.data()));
+    try {
+      const docSnapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
+      let matchFound = false;
 
-    if (rows.length === 0) return;
-
-    const headers = Object.keys(rows[0]);
-    const headerRow = document.createElement("tr");
-    headers.forEach(key => {
-      const th = document.createElement("th");
-      th.textContent = key;
-      th.className = "border px-2 py-1 text-left bg-gray-100";
-      headerRow.appendChild(th);
-    });
-    head.appendChild(headerRow);
-
-    rows.forEach(row => {
-      const tr = document.createElement("tr");
-      headers.forEach(key => {
-        const td = document.createElement("td");
-        td.textContent = row[key];
-        td.className = "border px-2 py-1";
-        tr.appendChild(td);
+      docSnapshot.forEach(async doc => {
+        if (doc.id === docId) {
+          matchFound = true;
+          const existing = doc.data();
+          const hasChanges = Object.keys(entry).some(key => entry[key] !== existing[key]);
+          if (hasChanges) {
+            await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry); // Overwrite
+            console.log("Updated:", docId);
+          } else {
+            console.log("No changes for:", docId);
+          }
+        }
       });
-      body.appendChild(tr);
-    });
 
-  } catch (err) {
-    console.error("Error loading from Firestore:", err);
+      if (!matchFound) {
+        await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry);
+        console.log("Added new:", docId);
+      }
+
+    } catch (err) {
+      console.error("Error syncing Firestore:", err);
+    }
   }
+
+  alert("Upload complete. Data saved to Firestore.");
 }
 
 loadSheetView("DASHBOARD");
-
