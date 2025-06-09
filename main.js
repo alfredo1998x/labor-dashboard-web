@@ -63,29 +63,52 @@ function getDashboardHTML() {
   `;
 }
 
+// ================== FIXED CSV UPLOAD + MAPPING ==================
 function handleFileUpload(event) {
   const file = event.target.files[0];
-  if (!file || !file.name.endsWith(".csv")) return alert("Upload CSV only.");
+  if (!file || !file.name.endsWith(".csv")) {
+    alert("Please upload a CSV file.");
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = function (e) {
     const rows = e.target.result.trim().split("\n").map(r => r.split(","));
-    syncToFirestore(rows);
+    normalizeAndUpload(rows);
   };
   reader.readAsText(file);
 }
 
-async function syncToFirestore(data) {
-  const headers = data[0];
+async function normalizeAndUpload(data) {
+  const headers = data[0].map(h => h.trim());
+  const colMap = {
+    "Business Date": "Date",
+    "Number": "EmployeeID",
+    "Last Name": "LastName",
+    "First Name": "FirstName",
+    "Hours": "Hours",
+    "Job": "Position",
+    "Department": "Department"
+  };
+
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const entry = {};
-    headers.forEach((h, idx) => {
-      entry[h.trim()] = row[idx]?.trim() ?? "";
-    });
+    const raw = {};
+    headers.forEach((h, j) => raw[h] = row[j]?.trim());
 
-    const key = `${entry["Date"]}_${entry["EmployeeID"]}_${entry["Department"]}`;
-    const id = btoa(key); // use base64 to avoid bad characters
+    if (!raw["Business Date"] || !raw["Number"] || !raw["Hours"]) continue;
+
+    const entry = {
+      Date: raw["Business Date"].split(" ")[0],
+      EmployeeID: raw["Number"],
+      Name: `${raw["Last Name"] ?? ""} ${raw["First Name"] ?? ""}`.trim(),
+      Hours: raw["Hours"],
+      Position: raw["Job"] ?? "",
+      Department: raw["Department"] ?? ""
+    };
+
+    const key = `${entry.Date}_${entry.EmployeeID}_${entry.Department}`;
+    const id = btoa(key);
 
     try {
       const docRef = window.firestoreCol(window.firestoreDb, "uploads");
@@ -94,10 +117,11 @@ async function syncToFirestore(data) {
       console.error("Upload failed", err);
     }
   }
-  alert("Data uploaded to Firestore.");
+
+  alert("Upload complete and normalized.");
 }
 
-// ========== DAILY OVER 8HR ==========
+// ========== DAILY OVER 8HR VIEW ==========
 
 function getWeekDates(start) {
   const dates = [];
@@ -118,10 +142,8 @@ async function loadDailyOTData(mondayStr) {
   const records = [];
   snapshot.forEach(doc => records.push(doc.data()));
 
-  // Filter by selected week
   const weeklyData = records.filter(r => dates.includes(r.Date));
 
-  // Group by EmployeeID
   const employees = {};
   weeklyData.forEach(r => {
     const id = r.EmployeeID;
@@ -136,7 +158,6 @@ async function loadDailyOTData(mondayStr) {
     employees[id].daily[r.Date] = parseFloat(r.Hours || 0);
   });
 
-  // Build HTML table
   const table = document.createElement("table");
   table.className = "w-full table-auto text-xs border border-collapse";
   const thead = document.createElement("thead");
@@ -156,8 +177,6 @@ async function loadDailyOTData(mondayStr) {
   const tbody = document.createElement("tbody");
   Object.entries(employees).forEach(([id, emp]) => {
     const tr = document.createElement("tr");
-    const row = [];
-
     const daily = dates.map(d => emp.daily[d] || 0);
     const total = daily.reduce((a, b) => a + b, 0);
     const days = daily.filter(h => h > 0).length;
