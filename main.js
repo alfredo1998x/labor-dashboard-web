@@ -1,4 +1,3 @@
-// Sheet names
 const sheetNames = [
   "DASHBOARD", "Daily over 8hr", "HSK Prod", "Schedule vs Projected",
   "Labor Variance", "MTD Hourly Emp", "Roster", "Last Week Hourly Emp",
@@ -98,9 +97,10 @@ function renderTable(data) {
   head.innerHTML = "";
   body.innerHTML = "";
 
-  // Header
+  const headers = data[0];
+
   const headerRow = document.createElement("tr");
-  data[0].forEach(cell => {
+  headers.forEach(cell => {
     const th = document.createElement("th");
     th.textContent = cell;
     th.className = "border px-2 py-1 text-left bg-gray-100";
@@ -108,8 +108,7 @@ function renderTable(data) {
   });
   head.appendChild(headerRow);
 
-  // Body
-  data.slice(1).forEach(row => {
+  data.slice(1).forEach(async row => {
     const tr = document.createElement("tr");
     row.forEach(cell => {
       const td = document.createElement("td");
@@ -118,8 +117,22 @@ function renderTable(data) {
       tr.appendChild(td);
     });
     body.appendChild(tr);
+
+    // Save each row to Firestore
+    if (window.firestoreDb) {
+      const entry = {};
+      headers.forEach((key, i) => {
+        entry[key.trim()] = row[i]?.trim() ?? "";
+      });
+      try {
+        await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry);
+        console.log("Uploaded row to Firestore:", entry);
+      } catch (err) {
+        console.error("Failed to upload row", err);
+      }
+    }
   });
 }
 
-// Load Dashboard initially
+// Load dashboard by default
 loadSheetView("DASHBOARD");
