@@ -1,11 +1,5 @@
 const sheetNames = [
-  "DASHBOARD", "Daily over 8hr", "HSK Prod", "Schedule vs Projected",
-  "Labor Variance", "MTD Hourly Emp", "Roster", "Last Week Hourly Emp",
-  "Fct Variance", "CLHours_LastWeek", "CLHours_CurrentWeek",
-  "LastWeek_Schedule", "CurrentWeek_Schedule", "NEW_Schedule",
-  "LastWeek_Fct", "CurrentWeek_Fct", "NEW_Fct", "Last_Week Room Stat",
-  "Current_Week Room STAT", "Last_Week Room Stat.", "Rooms Stats",
-  "Labor Forecast", "Emails"
+  "DASHBOARD", "Daily over 8hr"
 ];
 
 const sheetMenu = document.getElementById("sheetMenu");
@@ -21,8 +15,8 @@ sheetNames.forEach(name => {
   sheetMenu.appendChild(li);
 });
 
-function getMonday(d) {
-  d = new Date(d);
+function getMonday(date) {
+  const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(d.setDate(diff));
@@ -37,18 +31,16 @@ function loadSheetView(sheetName) {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
   } else if (sheetName === "Daily over 8hr") {
-    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading data...</p>";
+    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading...</p>";
     weekSelector.classList.remove("hidden");
 
     const today = new Date();
     weekPicker.value = getMonday(today);
-    loadDailyOTData(weekPicker.value);
+    loadDailyOver8hrTable(weekPicker.value);
 
     weekPicker.onchange = () => {
-      loadDailyOTData(weekPicker.value);
+      loadDailyOver8hrTable(weekPicker.value);
     };
-  } else {
-    mainView.innerHTML = `<h1 class="text-2xl font-bold">${sheetName}</h1>`;
   }
 }
 
@@ -63,11 +55,10 @@ function getDashboardHTML() {
   `;
 }
 
-// ================== FIXED CSV UPLOAD + MAPPING ==================
 function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file || !file.name.endsWith(".csv")) {
-    alert("Please upload a CSV file.");
+    alert("Upload a CSV file.");
     return;
   }
 
@@ -81,16 +72,6 @@ function handleFileUpload(event) {
 
 async function normalizeAndUpload(data) {
   const headers = data[0].map(h => h.trim());
-  const colMap = {
-    "Business Date": "Date",
-    "Number": "EmployeeID",
-    "Last Name": "LastName",
-    "First Name": "FirstName",
-    "Hours": "Hours",
-    "Job": "Position",
-    "Department": "Department"
-  };
-
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const raw = {};
@@ -107,9 +88,6 @@ async function normalizeAndUpload(data) {
       Department: raw["Department"] ?? ""
     };
 
-    const key = `${entry.Date}_${entry.EmployeeID}_${entry.Department}`;
-    const id = btoa(key);
-
     try {
       const docRef = window.firestoreCol(window.firestoreDb, "uploads");
       await window.firestoreAdd(docRef, entry);
@@ -118,10 +96,8 @@ async function normalizeAndUpload(data) {
     }
   }
 
-  alert("Upload complete and normalized.");
+  alert("Upload complete.");
 }
-
-// ========== DAILY OVER 8HR VIEW ==========
 
 function getWeekDates(start) {
   const dates = [];
@@ -134,24 +110,24 @@ function getWeekDates(start) {
   return dates;
 }
 
-async function loadDailyOTData(mondayStr) {
+async function loadDailyOver8hrTable(mondayStr) {
   mainView.innerHTML = "";
   const dates = getWeekDates(mondayStr);
+  const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const snapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
-
   const records = [];
   snapshot.forEach(doc => records.push(doc.data()));
 
-  const weeklyData = records.filter(r => dates.includes(r.Date));
-
+  const weekData = records.filter(r => dates.includes(r.Date));
   const employees = {};
-  weeklyData.forEach(r => {
+
+  weekData.forEach(r => {
     const id = r.EmployeeID;
     if (!employees[id]) {
       employees[id] = {
         name: r.Name,
-        position: r.Position,
         department: r.Department,
+        position: r.Position,
         daily: {},
       };
     }
@@ -163,8 +139,8 @@ async function loadDailyOTData(mondayStr) {
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
   [
-    "ID", "Name", "Dept", ...dates.map(d => new Date(d).toDateString().split(" ")[0]),
-    "Total", "Days", "Projected", "OT", "Risk", "Risk %"
+    "ID", "Name", "Position", "Dept",
+    ...weekdayNames, "Total", "Days", "Projected", "OT", "Risk", "Risk %", "OT Display"
   ].forEach(h => {
     const th = document.createElement("th");
     th.textContent = h;
@@ -181,33 +157,49 @@ async function loadDailyOTData(mondayStr) {
     const total = daily.reduce((a, b) => a + b, 0);
     const days = daily.filter(h => h > 0).length;
     const projected = total + (5 - days) * 8;
+    const projectedOT = Math.max(0, projected - 40);
     const actualOT = Math.max(0, total - 40);
-    const projOT = Math.max(0, projected - 40);
 
-    let risk = "No Risk", riskPct = "0%";
+    let risk = "No Risk", riskPct = "0%", displayOT = "";
     if (actualOT > 0) {
       risk = "Overtime";
       riskPct = "100%";
-    } else if (projOT > 0) {
+      displayOT = `${actualOT.toFixed(2)} hr OT`;
+    } else if (projectedOT > 0) {
       risk = "At Risk";
       riskPct = `${Math.round((days / 5) * 100)}%`;
+      displayOT = `${projectedOT.toFixed(2)} hr OT`;
     }
 
-    [
-      id, emp.name, emp.department, ...daily.map(n => n.toFixed(2)),
-      total.toFixed(2), days, projected.toFixed(2), actualOT.toFixed(2),
-      risk, riskPct
-    ].forEach((val, i) => {
+    const rowData = [
+      id,
+      emp.name,
+      emp.position,
+      emp.department,
+      ...daily.map(n => n.toFixed(2)),
+      total.toFixed(2),
+      days,
+      projected.toFixed(2),
+      actualOT.toFixed(2),
+      risk,
+      riskPct,
+      displayOT
+    ];
+
+    rowData.forEach((val, i) => {
       const td = document.createElement("td");
       td.textContent = val;
       td.className = "border px-2 py-1 text-center";
+
       if (i === 11) {
         td.style.backgroundColor =
           risk === "Overtime" ? "#f87171" :
           risk === "At Risk" ? "#facc15" : "#d1fae5";
       }
+
       tr.appendChild(td);
     });
+
     tbody.appendChild(tr);
   });
 
