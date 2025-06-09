@@ -1,0 +1,41 @@
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f2f5;
+  margin: 0;
+  padding: 40px;
+}
+.excel-container {
+  max-width: 800px;
+  margin: auto;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 20px;
+}
+.banner {
+  background-color: #fffbcc;
+  padding: 10px;
+  font-weight: bold;
+  border: 1px solid #e0d900;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.row {
+  display: flex;
+  margin-bottom: 8px;
+}
+.cell {
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  flex: 1;
+}
+.cell.label {
+  font-weight: bold;
+  background-color: #e6f2ff;
+}
+.header-row .cell {
+  text-align: center;
+}
+.spacer {
+  height: 20px;
+}
