@@ -5,6 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Labor Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase Setup -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBvSr4E_0PNugQ-C2U1-mnuTWXuy0ESdQ8",
+      authDomain: "labor-dashboard-eaece.firebaseapp.com",
+      projectId: "labor-dashboard-eaece",
+      storageBucket: "labor-dashboard-eaece.firebasestorage.app",
+      messagingSenderId: "790983804259",
+      appId: "1:790983804259:web:5d2c9785e4c90e1d107f56",
+      measurementId: "G-FKR20F88CZ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Expose Firebase to global JS
+    window.firestoreDb = db;
+    window.firestoreAdd = addDoc;
+    window.firestoreCol = collection;
+  </script>
 </head>
 <body class="bg-gray-100 text-sm">
 
@@ -16,9 +40,7 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-6 overflow-y-auto" id="mainView">
-      <!-- Dashboard is loaded here initially -->
-    </main>
+    <main class="flex-1 p-6 overflow-y-auto" id="mainView"></main>
   </div>
 
   <script src="main.js"></script>
