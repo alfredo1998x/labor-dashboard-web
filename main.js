@@ -1,4 +1,4 @@
-const sheetNames = ["DASHBOARD", "Daily over 8hr"];
+const sheetNames = ["DASHBOARD", "Daily over 8hr", "Raw Data"];
 
 const sheetMenu = document.getElementById("sheetMenu");
 const mainView = document.getElementById("mainView");
@@ -21,6 +21,17 @@ function getMonday(date) {
   return monday.toISOString().split("T")[0];
 }
 
+function getWeekDates(start) {
+  const dates = [];
+  const base = new Date(start);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().split("T")[0]);
+  }
+  return dates;
+}
+
 function loadSheetView(sheetName) {
   mainView.innerHTML = "";
   weekSelector.classList.add("hidden");
@@ -29,11 +40,15 @@ function loadSheetView(sheetName) {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
   } else if (sheetName === "Daily over 8hr") {
-    mainView.innerHTML = "<p class='text-gray-600 mb-4'>Loading data...</p>";
     weekSelector.classList.remove("hidden");
     weekPicker.value = getMonday(new Date());
     loadDailyOver8hrTable(weekPicker.value);
     weekPicker.onchange = () => loadDailyOver8hrTable(weekPicker.value);
+  } else if (sheetName === "Raw Data") {
+    weekSelector.classList.remove("hidden");
+    weekPicker.value = getMonday(new Date());
+    loadRawDataTable(weekPicker.value);
+    weekPicker.onchange = () => loadRawDataTable(weekPicker.value);
   }
 }
 
@@ -96,15 +111,45 @@ async function normalizeAndUpload(data) {
   alert("Upload complete.");
 }
 
-function getWeekDates(start) {
-  const dates = [];
-  const base = new Date(start);
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(base);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().split("T")[0]);
-  }
-  return dates;
+async function loadRawDataTable(mondayStr) {
+  mainView.innerHTML = "<p class='text-gray-600'>Loading raw data...</p>";
+  const dates = getWeekDates(mondayStr);
+  const snapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
+  const records = [];
+  snapshot.forEach(doc => records.push(doc.data()));
+
+  const filtered = records.filter(r => dates.includes(r.Date));
+
+  const table = document.createElement("table");
+  table.className = "w-full table-auto text-xs border border-collapse";
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+
+  ["Date", "EmployeeID", "Name", "Position", "Department", "Hours"].forEach(h => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    th.className = "border px-2 py-1 bg-gray-100";
+    headerRow.appendChild(th);
+  });
+
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  filtered.forEach(row => {
+    const tr = document.createElement("tr");
+    [row.Date, row.EmployeeID, row.Name, row.Position, row.Department, row.Hours].forEach(val => {
+      const td = document.createElement("td");
+      td.textContent = val;
+      td.className = "border px-2 py-1 text-center";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  mainView.innerHTML = "";
+  mainView.appendChild(table);
 }
 
 async function loadDailyOver8hrTable(mondayStr) {
