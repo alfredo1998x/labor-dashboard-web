@@ -6,51 +6,21 @@
   <title>Labor Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-sm p-6">
-  <div class="max-w-5xl mx-auto bg-white rounded-xl shadow p-6 space-y-6">
-    <h1 class="text-2xl font-bold text-blue-800">Labor Dashboard</h1>
+<body class="bg-gray-100 text-sm">
 
-    <!-- Important Note -->
-    <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded">
-      <strong>IMPORTANT:</strong> Transfer Schedules, Fct & CL Hrs before using this tab.
-    </div>
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-lg p-4 space-y-2 overflow-y-auto">
+      <h2 class="text-xl font-bold mb-4 text-blue-800">Sheet Menu</h2>
+      <ul id="sheetMenu" class="space-y-1 text-blue-700 font-medium"></ul>
+    </aside>
 
-    <!-- Daily / Weekly Headers -->
-    <div class="grid grid-cols-2 gap-4 mt-6 text-center font-semibold text-gray-700">
-      <div class="border p-4 bg-gray-50 rounded">Daily</div>
-      <div class="border p-4 bg-gray-50 rounded">Weekly</div>
-    </div>
-
-    <!-- Date Sections -->
-    <div class="grid grid-cols-3 gap-6 mt-6">
-      <!-- Last Week -->
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Last Week</h2>
-        <p>From: <strong>May 19, 2025</strong></p>
-        <p>To: <strong>May 25, 2025</strong></p>
-      </div>
-
-      <!-- Current Week -->
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Current Week</h2>
-        <p>From: <strong>June 2, 2025</strong></p>
-        <p>To: <strong>June 8, 2025</strong></p>
-      </div>
-
-      <!-- Forecast Week -->
-      <div class="bg-gray-100 border rounded p-4">
-        <h2 class="font-bold text-gray-700 mb-2">Forecast Week</h2>
-        <p>From: <strong>June 2, 2025</strong></p>
-        <p>To: <strong>June 8, 2025</strong></p>
-      </div>
-    </div>
-
-    <!-- Action Buttons -->
-    <div class="flex space-x-4 mt-6">
-      <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Upload Report</button>
-      <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Generate PDF</button>
-      <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Send Email</button>
-    </div>
+    <!-- Main Content -->
+    <main class="flex-1 p-6 overflow-y-auto" id="mainView">
+      <!-- Dashboard is loaded here initially -->
+    </main>
   </div>
+
+  <script src="main.js"></script>
 </body>
 </html>
