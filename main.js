@@ -1,4 +1,4 @@
-// Sheet names from your Excel workbook
+// Sheet names
 const sheetNames = [
   "DASHBOARD", "Daily over 8hr", "HSK Prod", "Schedule vs Projected",
   "Labor Variance", "MTD Hourly Emp", "Roster", "Last Week Hourly Emp",
@@ -9,7 +9,6 @@ const sheetNames = [
   "Labor Forecast", "Emails"
 ];
 
-// Build the sidebar menu
 const sheetMenu = document.getElementById("sheetMenu");
 const mainView = document.getElementById("mainView");
 
@@ -21,12 +20,11 @@ sheetNames.forEach(name => {
   sheetMenu.appendChild(li);
 });
 
-// Load view for selected sheet
 function loadSheetView(sheetName) {
-  mainView.innerHTML = ""; // Clear current view
-
+  mainView.innerHTML = "";
   if (sheetName === "DASHBOARD") {
     mainView.innerHTML = getDashboardHTML();
+    document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
   } else {
     mainView.innerHTML = `
       <h1 class="text-2xl font-bold text-gray-800 mb-4">${sheetName}</h1>
@@ -35,7 +33,6 @@ function loadSheetView(sheetName) {
   }
 }
 
-// Dashboard placeholder layout
 function getDashboardHTML() {
   return `
     <h1 class="text-2xl font-bold text-blue-800 mb-4">Labor Dashboard</h1>
@@ -48,27 +45,81 @@ function getDashboardHTML() {
       <div class="border p-4 bg-gray-50 rounded">Weekly</div>
     </div>
 
-    <div class="grid grid-cols-3 gap-6">
+    <div class="grid grid-cols-3 gap-6 mb-6">
       <div class="bg-gray-100 border rounded p-4">
         <h2 class="font-bold text-gray-700 mb-2">Last Week</h2>
         <p>From: <strong>May 19, 2025</strong></p>
         <p>To: <strong>May 25, 2025</strong></p>
       </div>
-
       <div class="bg-gray-100 border rounded p-4">
         <h2 class="font-bold text-gray-700 mb-2">Current Week</h2>
         <p>From: <strong>June 2, 2025</strong></p>
         <p>To: <strong>June 8, 2025</strong></p>
       </div>
-
       <div class="bg-gray-100 border rounded p-4">
         <h2 class="font-bold text-gray-700 mb-2">Forecast Week</h2>
         <p>From: <strong>June 2, 2025</strong></p>
         <p>To: <strong>June 8, 2025</strong></p>
       </div>
     </div>
+
+    <div class="mb-4">
+      <label for="csvUpload" class="font-semibold block mb-2">Upload CSV Report:</label>
+      <input type="file" id="csvUpload" class="border rounded p-2 w-full">
+    </div>
+
+    <div class="overflow-auto">
+      <table id="dataTable" class="w-full table-auto border-collapse border text-xs">
+        <thead id="tableHead" class="bg-gray-200"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
   `;
 }
 
-// Load Dashboard by default on first load
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !file.name.endsWith(".csv")) {
+    alert("Please upload a CSV file.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const rows = e.target.result.trim().split("\n").map(r => r.split(","));
+    renderTable(rows);
+  };
+  reader.readAsText(file);
+}
+
+function renderTable(data) {
+  const head = document.getElementById("tableHead");
+  const body = document.getElementById("tableBody");
+  head.innerHTML = "";
+  body.innerHTML = "";
+
+  // Header
+  const headerRow = document.createElement("tr");
+  data[0].forEach(cell => {
+    const th = document.createElement("th");
+    th.textContent = cell;
+    th.className = "border px-2 py-1 text-left bg-gray-100";
+    headerRow.appendChild(th);
+  });
+  head.appendChild(headerRow);
+
+  // Body
+  data.slice(1).forEach(row => {
+    const tr = document.createElement("tr");
+    row.forEach(cell => {
+      const td = document.createElement("td");
+      td.textContent = cell;
+      td.className = "border px-2 py-1";
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+// Load Dashboard initially
 loadSheetView("DASHBOARD");
