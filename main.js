@@ -24,6 +24,7 @@ function loadSheetView(sheetName) {
   if (sheetName === "DASHBOARD") {
     mainView.innerHTML = getDashboardHTML();
     document.getElementById("csvUpload").addEventListener("change", handleFileUpload);
+    loadDashboardData();
   } else {
     mainView.innerHTML = `
       <h1 class="text-2xl font-bold text-gray-800 mb-4">${sheetName}</h1>
@@ -118,7 +119,7 @@ function renderTable(data) {
     });
     body.appendChild(tr);
 
-    // Save each row to Firestore
+    // Save to Firestore
     if (window.firestoreDb) {
       const entry = {};
       headers.forEach((key, i) => {
@@ -126,13 +127,53 @@ function renderTable(data) {
       });
       try {
         await window.firestoreAdd(window.firestoreCol(window.firestoreDb, "uploads"), entry);
-        console.log("Uploaded row to Firestore:", entry);
       } catch (err) {
-        console.error("Failed to upload row", err);
+        console.error("Firestore save failed:", err);
       }
     }
   });
 }
 
-// Load dashboard by default
+async function loadDashboardData() {
+  const head = document.getElementById("tableHead");
+  const body = document.getElementById("tableBody");
+  head.innerHTML = "";
+  body.innerHTML = "";
+
+  if (!window.firestoreDb) return;
+
+  try {
+    const snapshot = await window.firestoreGet(window.firestoreCol(window.firestoreDb, "uploads"));
+    const rows = [];
+    snapshot.forEach(doc => rows.push(doc.data()));
+
+    if (rows.length === 0) return;
+
+    const headers = Object.keys(rows[0]);
+    const headerRow = document.createElement("tr");
+    headers.forEach(key => {
+      const th = document.createElement("th");
+      th.textContent = key;
+      th.className = "border px-2 py-1 text-left bg-gray-100";
+      headerRow.appendChild(th);
+    });
+    head.appendChild(headerRow);
+
+    rows.forEach(row => {
+      const tr = document.createElement("tr");
+      headers.forEach(key => {
+        const td = document.createElement("td");
+        td.textContent = row[key];
+        td.className = "border px-2 py-1";
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("Error loading from Firestore:", err);
+  }
+}
+
 loadSheetView("DASHBOARD");
+
